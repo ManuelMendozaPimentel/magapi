@@ -3,28 +3,29 @@ const nodemailer = require('nodemailer');
 // Configurar transporter con Gmail
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  // ✅ IMPORTANTE: Convertir a número entero
   port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: false, // false para puerto 587 (usa STARTTLS), true para 465
+  secure: false, // false para puerto 587 (STARTTLS)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false // Para evitar errores con certificados self-signed
+    rejectUnauthorized: false
   },
   // ✅ Timeouts para evitar conexiones infinitas
-  connectionTimeout: 10000, // 10 segundos
-  socketTimeout: 10000
+  connectionTimeout: 10000,
+  socketTimeout: 10000,
+  // ✅ IMPORTANTE: Forzar IPv4 para evitar error ENETUNREACH
+  ipFamily: 4
 });
 
-// ✅ Logs de debug para verificar variables de entorno
+// Logs de debug
 console.log('📧 [Email Debug] HOST:', process.env.EMAIL_HOST);
 console.log('📧 [Email Debug] PORT:', process.env.EMAIL_PORT, '(tipo:', typeof process.env.EMAIL_PORT, ')');
 console.log('📧 [Email Debug] USER:', process.env.EMAIL_USER);
 console.log('📧 [Email Debug] PASS length:', process.env.EMAIL_PASS?.length);
 console.log('📧 [Email Debug] FROM:', process.env.EMAIL_FROM);
-console.log('📧 [Email Debug] secure:', false, '(para puerto 587)');
+console.log('📧 [Email Debug] ipFamily: 4 (forzando IPv4)');
 
 // Verificar configuración al iniciar
 transporter.verify((error, success) => {
@@ -32,6 +33,7 @@ transporter.verify((error, success) => {
     console.error('❌ Error configurando Gmail:', error.message);
     console.error('❌ Error code:', error.code);
     console.error('❌ Error command:', error.command);
+    console.error('❌ Error address:', error.address);
   } else {
     console.log('✅ Servidor de correo listo para enviar emails');
   }
@@ -105,7 +107,7 @@ async function enviarCodigoVerificacion(correo, codigo) {
 }
 
 /**
- * Envía email de cuenta activada (después de verificación manual de cédula)
+ * Envía email de cuenta activada
  */
 async function enviarEmailActivacion(correo) {
   try {
@@ -130,7 +132,7 @@ async function enviarEmailActivacion(correo) {
           </p>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL}/login" 
+            <a href="${(process.env.FRONTEND_URL || '').trim()}/login" 
                style="display: inline-block; padding: 15px 30px; background-color: #2c7a6b; 
                       color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
               Iniciar Sesión
