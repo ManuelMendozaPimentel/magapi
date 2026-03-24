@@ -1,10 +1,11 @@
 const nodemailer = require('nodemailer');
+require('dns').setDefaultResultOrder('ipv4first');
 
 // Configurar transporter con Gmail
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: false, // false para puerto 587 (STARTTLS)
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -12,11 +13,10 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  // ✅ Timeouts para evitar conexiones infinitas
   connectionTimeout: 10000,
   socketTimeout: 10000,
-  // ✅ IMPORTANTE: Forzar IPv4 para evitar error ENETUNREACH
-  ipFamily: 4
+  // ✅ Alternativa: usar 'family' en lugar de 'ipFamily' (depende de la versión)
+  family: 4
 });
 
 // Logs de debug
