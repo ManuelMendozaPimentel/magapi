@@ -13,7 +13,7 @@ async function enviarCodigoVerificacion(correo, codigo) {
   try {
     const msg = {
       to: correo,
-      from: 'neurotrack@sendgrid.net',
+      from: 'manuelmendoza101003@gmail.com',
       replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu código de verificación - NeuroTrack',
       html: `
@@ -82,7 +82,7 @@ async function enviarEmailActivacion(correo) {
   try {
     const msg = {
       to: correo,
-      from: 'neurotrack@sendgrid.net',
+      from: 'manuelmendoza101003@gmail.com',
       replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu cuenta NeuroTrack ha sido activada',
       html: `
