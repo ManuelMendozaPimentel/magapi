@@ -1,78 +1,18 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Configuración mejorada para IPv4
-const emailConfig = {
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
-    ciphers: 'SSLv3'
-  },
-  connectionTimeout: 10000,
-  socketTimeout: 10000,
-  // Forzar IPv4 explícitamente
-  family: 4,
-  // Configuración adicional para nodemailer
-  pool: true,
-  maxConnections: 5,
-  rateDelta: 1000,
-  rateLimit: 5
-};
+// Inicializar Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verificar si estamos en producción (Railway)
-if (process.env.NODE_ENV === 'production') {
-  console.log('🔧 Configurando para Railway (IPv4 fix)');
-  // Configuración específica para Railway
-  emailConfig.connectionOptions = {
-    family: 4
-  };
-}
-
-const transporter = nodemailer.createTransport(emailConfig);
-
-// Logs de debug mejorados
-console.log('📧 [Email Debug] HOST:', process.env.EMAIL_HOST);
-console.log('📧 [Email Debug] PORT:', parseInt(process.env.EMAIL_PORT));
-console.log('📧 [Email Debug] USER:', process.env.EMAIL_USER);
-console.log('📧 [Email Debug] PASS length:', process.env.EMAIL_PASS?.length);
+console.log('📧 [Email Debug] Usando Resend');
 console.log('📧 [Email Debug] FROM:', process.env.EMAIL_FROM);
-console.log('📧 [Email Debug] Configuración IPv4 forzada');
 
-// Función para verificar la conexión con reintentos
-async function verifyConnectionWithRetry(retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await transporter.verify();
-      console.log('✅ Servidor de correo listo para enviar emails');
-      return true;
-    } catch (error) {
-      console.log(`❌ Intento ${i + 1} de ${retries} falló:`, error.message);
-      if (i === retries - 1) {
-        console.error('❌ Error configurando Gmail:', error.message);
-        console.error('❌ Error code:', error.code);
-        console.error('❌ Error command:', error.command);
-        console.error('❌ Error address:', error.address);
-        return false;
-      }
-      // Esperar 2 segundos antes de reintentar
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-}
-
-// Verificar configuración al iniciar
-verifyConnectionWithRetry();
-
-// Resto de tus funciones...
+/**
+ * Envía email con código de verificación
+ */
 async function enviarCodigoVerificacion(correo, codigo) {
   try {
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'onboarding@resend.dev', // Usa el dominio de prueba temporal
       to: correo,
       subject: 'Tu código de verificación - NeuroTrack',
       html: `
@@ -120,23 +60,28 @@ async function enviarCodigoVerificacion(correo, codigo) {
         ---
         NeuroTrack - Plataforma de monitoreo para pacientes con Parkinson
       `
-    };
+    });
     
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email de verificación enviado:', info.messageId);
-    return info;
+    if (error) {
+      console.error('❌ Error Resend:', error);
+      throw error;
+    }
+    
+    console.log('✅ Email de verificación enviado:', data.id);
+    return data;
   } catch (error) {
     console.error('❌ Error enviando email de verificación:', error.message);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Error command:', error.command);
     throw error;
   }
 }
 
+/**
+ * Envía email de cuenta activada
+ */
 async function enviarEmailActivacion(correo) {
   try {
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
       to: correo,
       subject: 'Tu cuenta NeuroTrack ha sido activada',
       html: `
@@ -171,15 +116,17 @@ async function enviarEmailActivacion(correo) {
           </p>
         </div>
       `
-    };
+    });
     
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email de activación enviado:', info.messageId);
-    return info;
+    if (error) {
+      console.error('❌ Error Resend:', error);
+      throw error;
+    }
+    
+    console.log('✅ Email de activación enviado:', data.id);
+    return data;
   } catch (error) {
     console.error('❌ Error enviando email de activación:', error.message);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Error command:', error.command);
     throw error;
   }
 }
