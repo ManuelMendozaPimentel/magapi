@@ -1,8 +1,7 @@
 const nodemailer = require('nodemailer');
-require('dns').setDefaultResultOrder('ipv4first');
 
-// Configurar transporter con Gmail
-const transporter = nodemailer.createTransport({
+// Configuración mejorada para IPv4
+const emailConfig = {
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT) || 587,
   secure: false,
@@ -11,37 +10,65 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    ciphers: 'SSLv3'
   },
   connectionTimeout: 10000,
   socketTimeout: 10000,
-  // ✅ Alternativa: usar 'family' en lugar de 'ipFamily' (depende de la versión)
-  family: 4
-});
+  // Forzar IPv4 explícitamente
+  family: 4,
+  // Configuración adicional para nodemailer
+  pool: true,
+  maxConnections: 5,
+  rateDelta: 1000,
+  rateLimit: 5
+};
 
-// Logs de debug
+// Verificar si estamos en producción (Railway)
+if (process.env.NODE_ENV === 'production') {
+  console.log('🔧 Configurando para Railway (IPv4 fix)');
+  // Configuración específica para Railway
+  emailConfig.connectionOptions = {
+    family: 4
+  };
+}
+
+const transporter = nodemailer.createTransport(emailConfig);
+
+// Logs de debug mejorados
 console.log('📧 [Email Debug] HOST:', process.env.EMAIL_HOST);
-console.log('📧 [Email Debug] PORT:', process.env.EMAIL_PORT, '(tipo:', typeof process.env.EMAIL_PORT, ')');
+console.log('📧 [Email Debug] PORT:', parseInt(process.env.EMAIL_PORT));
 console.log('📧 [Email Debug] USER:', process.env.EMAIL_USER);
 console.log('📧 [Email Debug] PASS length:', process.env.EMAIL_PASS?.length);
 console.log('📧 [Email Debug] FROM:', process.env.EMAIL_FROM);
-console.log('📧 [Email Debug] ipFamily: 4 (forzando IPv4)');
+console.log('📧 [Email Debug] Configuración IPv4 forzada');
+
+// Función para verificar la conexión con reintentos
+async function verifyConnectionWithRetry(retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await transporter.verify();
+      console.log('✅ Servidor de correo listo para enviar emails');
+      return true;
+    } catch (error) {
+      console.log(`❌ Intento ${i + 1} de ${retries} falló:`, error.message);
+      if (i === retries - 1) {
+        console.error('❌ Error configurando Gmail:', error.message);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error command:', error.command);
+        console.error('❌ Error address:', error.address);
+        return false;
+      }
+      // Esperar 2 segundos antes de reintentar
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
 
 // Verificar configuración al iniciar
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Error configurando Gmail:', error.message);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Error command:', error.command);
-    console.error('❌ Error address:', error.address);
-  } else {
-    console.log('✅ Servidor de correo listo para enviar emails');
-  }
-});
+verifyConnectionWithRetry();
 
-/**
- * Envía email con código de verificación de 6 dígitos
- */
+// Resto de tus funciones...
 async function enviarCodigoVerificacion(correo, codigo) {
   try {
     const mailOptions = {
@@ -106,9 +133,6 @@ async function enviarCodigoVerificacion(correo, codigo) {
   }
 }
 
-/**
- * Envía email de cuenta activada
- */
 async function enviarEmailActivacion(correo) {
   try {
     const mailOptions = {
@@ -123,7 +147,7 @@ async function enviarEmailActivacion(correo) {
           
           <h3 style="color: #333;">¡Cuenta Activada! 🎉</h3>
           <p style="color: #666; font-size: 16px;">
-            Tu cédula profesional ha sido verificada exitosamente por nuestro equipo.
+            Tu cuenta ha sido verificada exitosamente por nuestro equipo.
           </p>
           
           <p style="color: #666; font-size: 16px;">
