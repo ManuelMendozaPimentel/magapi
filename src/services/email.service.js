@@ -1,19 +1,20 @@
-const { Resend } = require('resend');
+const sgMail = require('@sendgrid/mail');
 
-// Inicializar Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configurar SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-console.log('📧 [Email Debug] Usando Resend');
-console.log('📧 [Email Debug] FROM:', process.env.EMAIL_FROM);
+console.log('📧 [Email Debug] Usando SendGrid');
+console.log('📧 [Email Debug] FROM: neurotrack@sendgrid.net');
 
 /**
  * Envía email con código de verificación
  */
 async function enviarCodigoVerificacion(correo, codigo) {
   try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'onboarding@resend.dev', // Usa el dominio de prueba temporal
+    const msg = {
       to: correo,
+      from: 'neurotrack@sendgrid.net',
+      replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu código de verificación - NeuroTrack',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -60,17 +61,16 @@ async function enviarCodigoVerificacion(correo, codigo) {
         ---
         NeuroTrack - Plataforma de monitoreo para pacientes con Parkinson
       `
-    });
+    };
     
-    if (error) {
-      console.error('❌ Error Resend:', error);
-      throw error;
-    }
-    
-    console.log('✅ Email de verificación enviado:', data.id);
-    return data;
+    const response = await sgMail.send(msg);
+    console.log('✅ Email de verificación enviado:', response[0].statusCode);
+    return response;
   } catch (error) {
     console.error('❌ Error enviando email de verificación:', error.message);
+    if (error.response) {
+      console.error('❌ Detalles:', error.response.body);
+    }
     throw error;
   }
 }
@@ -80,9 +80,10 @@ async function enviarCodigoVerificacion(correo, codigo) {
  */
 async function enviarEmailActivacion(correo) {
   try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+    const msg = {
       to: correo,
+      from: 'neurotrack@sendgrid.net',
+      replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu cuenta NeuroTrack ha sido activada',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -116,17 +117,16 @@ async function enviarEmailActivacion(correo) {
           </p>
         </div>
       `
-    });
+    };
     
-    if (error) {
-      console.error('❌ Error Resend:', error);
-      throw error;
-    }
-    
-    console.log('✅ Email de activación enviado:', data.id);
-    return data;
+    const response = await sgMail.send(msg);
+    console.log('✅ Email de activación enviado:', response[0].statusCode);
+    return response;
   } catch (error) {
     console.error('❌ Error enviando email de activación:', error.message);
+    if (error.response) {
+      console.error('❌ Detalles:', error.response.body);
+    }
     throw error;
   }
 }
