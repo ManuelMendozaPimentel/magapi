@@ -18,6 +18,7 @@ app.use('/api/perfil', require('./routes/perfil.routes'));
 app.use('/api/pacientes', require('./routes/pacientes.routes'));
 app.use('/api/consultas', require('./routes/consultas.routes'));
 app.use('/api/dashboard', require('./routes/dashboard.routes'));
+app.use('/api/citas', require('./routes/citas.routes'));
 
 // Health check
 app.get('/health', (req, res) => {
