@@ -4,6 +4,7 @@ const pool = require('../config/database');
 // POST /api/consultas
 // Crea la consulta y sus medicamentos en una
 // sola transacción. Si algo falla, revierte todo.
+// AHORA CON SOPORTE PARA UPDRS
 // ─────────────────────────────────────────────
 async function crearConsulta(req, res) {
   const client = await pool.connect();
@@ -17,7 +18,7 @@ async function crearConsulta(req, res) {
       plan_tratamiento,
       indicaciones,
       proxima_cita,
-      // Signos vitales (todos opcionales)
+      // Signos vitales
       peso,
       talla,
       imc,
@@ -25,6 +26,11 @@ async function crearConsulta(req, res) {
       frecuencia_cardiaca,
       temperatura,
       glucosa,
+      // UPDRS (nuevos campos)
+      updrs_parte1,
+      updrs_parte2,
+      updrs_parte3,
+      updrs_parte4,
       // Array de medicamentos
       medicamentos = []
     } = req.body;
@@ -58,6 +64,35 @@ async function crearConsulta(req, res) {
       });
     }
 
+    // Validar rangos UPDRS si vienen
+    const validarUpdrs = (valor, min, max, nombre) => {
+      if (valor !== undefined && valor !== null) {
+        if (valor < min || valor > max) {
+          throw new Error(`${nombre} debe estar entre ${min} y ${max}`);
+        }
+      }
+    };
+
+    try {
+      validarUpdrs(updrs_parte1, 0, 52, 'UPDRS Parte I');
+      validarUpdrs(updrs_parte2, 0, 52, 'UPDRS Parte II');
+      validarUpdrs(updrs_parte3, 0, 132, 'UPDRS Parte III');
+      validarUpdrs(updrs_parte4, 0, 23, 'UPDRS Parte IV');
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // Calcular UPDRS total si al menos una parte viene
+    let updrs_total = null;
+    if (updrs_parte1 !== undefined || updrs_parte2 !== undefined || 
+        updrs_parte3 !== undefined || updrs_parte4 !== undefined) {
+      updrs_total = (updrs_parte1 || 0) + (updrs_parte2 || 0) + 
+                    (updrs_parte3 || 0) + (updrs_parte4 || 0);
+    }
+
     // Verificar que el paciente esté vinculado al doctor
     const vinculacion = await client.query(
       `SELECT id FROM doctores_pacientes
@@ -74,34 +109,41 @@ async function crearConsulta(req, res) {
 
     await client.query('BEGIN');
 
-    // 1. Insertar la consulta
+    // 1. Insertar la consulta (con UPDRS)
     const consultaResult = await client.query(
       `INSERT INTO consultas (
         doctor_id, paciente_id,
         motivo_consulta, diagnostico, plan_tratamiento, indicaciones,
         peso, talla, imc, presion_arterial,
         frecuencia_cardiaca, temperatura, glucosa,
-        proxima_cita
+        proxima_cita,
+        updrs_parte1, updrs_parte2, updrs_parte3, updrs_parte4, updrs_total
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11, $12, $13,
-        $14
+        $14,
+        $15, $16, $17, $18, $19
       ) RETURNING id, created_at`,
       [
         doctorId,
         paciente_id,
         motivo_consulta.trim(),
         diagnostico.trim(),
-        plan_tratamiento?.trim()  || null,
-        indicaciones?.trim()      || null,
-        peso               || null,
-        talla              || null,
-        imc                || null,
-        presion_arterial   || null,
-        frecuencia_cardiaca|| null,
-        temperatura        || null,
-        glucosa            || null,
-        proxima_cita       || null
+        plan_tratamiento?.trim() || null,
+        indicaciones?.trim() || null,
+        peso || null,
+        talla || null,
+        imc || null,
+        presion_arterial || null,
+        frecuencia_cardiaca || null,
+        temperatura || null,
+        glucosa || null,
+        proxima_cita || null,
+        updrs_parte1 !== undefined ? updrs_parte1 : null,
+        updrs_parte2 !== undefined ? updrs_parte2 : null,
+        updrs_parte3 !== undefined ? updrs_parte3 : null,
+        updrs_parte4 !== undefined ? updrs_parte4 : null,
+        updrs_total
       ]
     );
 
@@ -118,9 +160,9 @@ async function crearConsulta(req, res) {
         [
           consulta.id,
           med.nombre.trim(),
-          med.dosis      || null,
+          med.dosis || null,
           med.frecuencia || null,
-          med.duracion   || null
+          med.duracion || null
         ]
       );
     }
@@ -131,11 +173,12 @@ async function crearConsulta(req, res) {
       success: true,
       message: 'Consulta registrada correctamente',
       data: {
-        id:           consulta.id,
-        created_at:   consulta.created_at,
+        id: consulta.id,
+        created_at: consulta.created_at,
         paciente_id,
-        diagnostico:  diagnostico.trim(),
-        medicamentos: medsValidos.length
+        diagnostico: diagnostico.trim(),
+        medicamentos: medsValidos.length,
+        updrs_total: updrs_total
       }
     });
 
@@ -154,7 +197,6 @@ async function crearConsulta(req, res) {
 // ─────────────────────────────────────────────
 // GET /api/consultas
 // Últimas consultas del doctor (todas sus pacientes)
-// Útil para la vista general / dashboard
 // ─────────────────────────────────────────────
 async function listarConsultasDoctor(req, res) {
   try {
@@ -169,10 +211,10 @@ async function listarConsultasDoctor(req, res) {
         c.diagnostico,
         c.motivo_consulta,
         c.proxima_cita,
+        c.updrs_total,
         p.id           AS paciente_id,
         p.nombre_completo AS paciente_nombre,
         p.correo       AS paciente_correo,
-        -- Cuenta de medicamentos de esta consulta
         COUNT(cm.id)::INTEGER AS total_medicamentos
       FROM consultas c
       JOIN pacientes p ON p.id = c.paciente_id
@@ -184,7 +226,6 @@ async function listarConsultasDoctor(req, res) {
       [doctorId, limit, offset]
     );
 
-    // Total para paginación
     const totalResult = await pool.query(
       'SELECT COUNT(*)::INTEGER AS total FROM consultas WHERE doctor_id = $1',
       [doctorId]
@@ -192,8 +233,8 @@ async function listarConsultasDoctor(req, res) {
 
     res.json({
       success: true,
-      data:    result.rows,
-      total:   totalResult.rows[0].total,
+      data: result.rows,
+      total: totalResult.rows[0].total,
       limit,
       offset
     });
@@ -210,14 +251,12 @@ async function listarConsultasDoctor(req, res) {
 // ─────────────────────────────────────────────
 // GET /api/consultas/paciente/:pacienteId
 // Todas las consultas de un paciente específico
-// Solo el doctor que las creó puede verlas
 // ─────────────────────────────────────────────
 async function listarConsultasPaciente(req, res) {
   try {
-    const doctorId   = req.doctor.id;
+    const doctorId = req.doctor.id;
     const pacienteId = req.params.pacienteId;
 
-    // Verificar vinculación
     const vinculacion = await pool.query(
       `SELECT id FROM doctores_pacientes
        WHERE doctor_id = $1 AND paciente_id = $2 AND activo = TRUE`,
@@ -240,10 +279,14 @@ async function listarConsultasPaciente(req, res) {
         c.plan_tratamiento,
         c.indicaciones,
         c.proxima_cita,
+        c.updrs_parte1,
+        c.updrs_parte2,
+        c.updrs_parte3,
+        c.updrs_parte4,
+        c.updrs_total,
         c.peso, c.talla, c.imc,
         c.presion_arterial, c.frecuencia_cardiaca,
         c.temperatura, c.glucosa,
-        -- Medicamentos como array JSON
         COALESCE(
           json_agg(
             json_build_object(
@@ -266,8 +309,8 @@ async function listarConsultasPaciente(req, res) {
 
     res.json({
       success: true,
-      data:    result.rows,
-      total:   result.rowCount
+      data: result.rows,
+      total: result.rowCount
     });
 
   } catch (error) {
@@ -282,11 +325,10 @@ async function listarConsultasPaciente(req, res) {
 // ─────────────────────────────────────────────
 // GET /api/consultas/:id
 // Detalle completo de una consulta específica
-// Solo el doctor que la creó puede verla
 // ─────────────────────────────────────────────
 async function obtenerConsulta(req, res) {
   try {
-    const doctorId   = req.doctor.id;
+    const doctorId = req.doctor.id;
     const consultaId = req.params.id;
 
     const result = await pool.query(
@@ -304,6 +346,12 @@ async function obtenerConsulta(req, res) {
         c.frecuencia_cardiaca,
         c.temperatura,
         c.glucosa,
+        -- UPDRS
+        c.updrs_parte1,
+        c.updrs_parte2,
+        c.updrs_parte3,
+        c.updrs_parte4,
+        c.updrs_total,
         -- Datos del paciente
         p.id              AS paciente_id,
         p.nombre_completo AS paciente_nombre,
