@@ -226,6 +226,10 @@ async function listarAlertas(req, res) {
  * GET /api/dashboard/citas-proximas
  * Próximas citas agendadas (usando tabla citas)
  */
+/**
+ * GET /api/dashboard/citas-proximas
+ * Próximas citas agendadas (usando tabla citas)
+ */
 async function listarCitasProximas(req, res) {
   try {
     const doctorId = req.doctor.id;
@@ -255,39 +259,53 @@ async function listarCitasProximas(req, res) {
       [doctorId, parseInt(dias)]
     );
 
-    // Agrupar por fecha
+    // ============================================
+    // CORRECCIÓN: Normalizar fechas correctamente
+    // ============================================
     const agrupadas = {
       hoy: [],
       manana: [],
       esta_semana: []
     };
 
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
+    // Obtener fechas de referencia (normalizadas a medianoche)
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
     
-    const mananaInicio = new Date(hoyInicio);
-    mananaInicio.setDate(mananaInicio.getDate() + 1);
+    const manana = new Date(hoy);
+    manana.setDate(hoy.getDate() + 1);
     
-    const semanaFin = new Date(hoyInicio);
-    semanaFin.setDate(semanaFin.getDate() + 7);
+    const dentroDe7Dias = new Date(hoy);
+    dentroDe7Dias.setDate(hoy.getDate() + 7);
 
     result.rows.forEach(cita => {
       const fechaCita = new Date(cita.fecha_hora);
-      const horaFormateada = fechaCita.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      // Normalizar la fecha de la cita a medianoche para comparar solo fechas
+      const fechaCitaNormalizada = new Date(fechaCita);
+      fechaCitaNormalizada.setHours(0, 0, 0, 0);
+      
+      const horaFormateada = fechaCita.toLocaleTimeString('es-MX', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
       
       const citaFormateada = {
         ...cita,
         hora: horaFormateada,
-        fecha: fechaCita.toISOString().split('T')[0]
+        fecha: fechaCitaNormalizada.toISOString().split('T')[0]
       };
       
-      if (fechaCita >= hoyInicio && fechaCita < mananaInicio) {
+      // Comparar usando getTime() (valores numéricos)
+      if (fechaCitaNormalizada.getTime() === hoy.getTime()) {
         agrupadas.hoy.push(citaFormateada);
-      } else if (fechaCita >= mananaInicio && fechaCita < semanaFin) {
+      } 
+      else if (fechaCitaNormalizada.getTime() === manana.getTime()) {
         agrupadas.manana.push(citaFormateada);
-      } else {
+      } 
+      else if (fechaCitaNormalizada > manana && fechaCitaNormalizada <= dentroDe7Dias) {
         agrupadas.esta_semana.push(citaFormateada);
       }
+      // Las citas fuera de este rango no se muestran (ya están filtradas por la consulta)
     });
 
     res.json({
