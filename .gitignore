@@ -1,2 +1,27 @@
+# Dependencias (se instalan en EB)
 node_modules/
+npm-debug.log
+
+# Archivos de entorno local (NO subir credenciales)
 .env
+.env.local
+.env.example
+
+# Git
+.git/
+.gitignore
+
+# Archivos de desarrollo
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Backups y archivos temporales
+*.sql
+*.zip
+*.tar.gz
+backups/
+
+# Documentación
+README.md

@@ -7,10 +7,13 @@ const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
+    ssl: false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
+
+
 
 // Testear conexión
 pool.on('connect', () => {
