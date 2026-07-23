@@ -1,10 +1,27 @@
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
-// Configurar SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Configurar transporter con Gmail usando las variables de entorno de AWS
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST, // smtp.gmail.com
+  port: parseInt(process.env.EMAIL_PORT) || 587,
+  secure: false, 
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false 
+  }
+});
 
-console.log('📧 [Email Debug] Usando SendGrid');
-console.log('📧 [Email Debug] FROM: neurotrack@sendgrid.net');
+// Verificar conexión al iniciar
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Error configurando Gmail:', error);
+  } else {
+    console.log('✅ Servidor de correo Gmail listo');
+  }
+});
 
 /**
  * Envía email con código de verificación
@@ -12,9 +29,8 @@ console.log('📧 [Email Debug] FROM: neurotrack@sendgrid.net');
 async function enviarCodigoVerificacion(correo, codigo) {
   try {
     const msg = {
+      from: process.env.EMAIL_FROM, // NeuroTrack <manuelmendoza...>
       to: correo,
-      from: 'manuelmendoza101003@gmail.com',
-      replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu código de verificación - NeuroTrack',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -37,8 +53,8 @@ async function enviarCodigoVerificacion(correo, codigo) {
           </div>
           
           <p style="color: #666; font-size: 14px;">
-            ⏰ Este código expira en <strong>15 minutos</strong>.<br>
-            🔒 Si no solicitaste este código, ignora este mensaje.
+             Este código expira en <strong>15 minutos</strong>.<br>
+             Si no solicitaste este código, ignora este mensaje.
           </p>
           
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
@@ -49,28 +65,14 @@ async function enviarCodigoVerificacion(correo, codigo) {
           </p>
         </div>
       `,
-      text: `
-        NeuroTrack - Verificación de correo
-        
-        Tu código de verificación es: ${codigo}
-        
-        Este código expira en 15 minutos.
-        
-        Si no solicitaste este código, ignora este mensaje.
-        
-        ---
-        NeuroTrack - Plataforma de monitoreo para pacientes con Parkinson
-      `
+      text: `Tu código de verificación es: ${codigo}. Expira en 15 minutos.`
     };
     
-    const response = await sgMail.send(msg);
-    console.log('✅ Email de verificación enviado:', response[0].statusCode);
-    return response;
+    const info = await transporter.sendMail(msg);
+    console.log('✅ Email de verificación enviado:', info.messageId);
+    return info;
   } catch (error) {
-    console.error('❌ Error enviando email de verificación:', error.message);
-    if (error.response) {
-      console.error('❌ Detalles:', error.response.body);
-    }
+    console.error('❌ Error enviando email:', error.message);
     throw error;
   }
 }
@@ -81,9 +83,8 @@ async function enviarCodigoVerificacion(correo, codigo) {
 async function enviarEmailActivacion(correo) {
   try {
     const msg = {
+      from: process.env.EMAIL_FROM,
       to: correo,
-      from: 'manuelmendoza101003@gmail.com',
-      replyTo: 'manuelmendoza101003@gmail.com',
       subject: 'Tu cuenta NeuroTrack ha sido activada',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -91,7 +92,7 @@ async function enviarEmailActivacion(correo) {
             <h2 style="color: #2c7a6b; margin: 0;">NeuroTrack</h2>
           </div>
           
-          <h3 style="color: #333;">¡Cuenta Activada! 🎉</h3>
+          <h3 style="color: #333;">¡Cuenta Activada! </h3>
           <p style="color: #666; font-size: 16px;">
             Tu cuenta ha sido verificada exitosamente por nuestro equipo.
           </p>
@@ -119,14 +120,11 @@ async function enviarEmailActivacion(correo) {
       `
     };
     
-    const response = await sgMail.send(msg);
-    console.log('✅ Email de activación enviado:', response[0].statusCode);
-    return response;
+    const info = await transporter.sendMail(msg);
+    console.log('✅ Email de activación enviado:', info.messageId);
+    return info;
   } catch (error) {
-    console.error('❌ Error enviando email de activación:', error.message);
-    if (error.response) {
-      console.error('❌ Detalles:', error.response.body);
-    }
+    console.error('❌ Error enviando email:', error.message);
     throw error;
   }
 }
